@@ -101,22 +101,6 @@ button.pri{background:var(--acc);color:#fff;border-color:var(--acc)}
   <div class="detail" id="amsg"></div>
   <div class="bar"><button id="aclr">保存データを消す</button></div>
 </div>
-<div class="card">
-  <h2>ジャイロ操作</h2>
-  <div class="bar" style="margin-top:0"><button id="gy">ジャイロ操作を開始</button><button id="grs">基準をリセット</button>
-    <label style="display:flex;align-items:center;gap:6px;color:var(--fg);font-size:.85rem">速度<select id="gsp" style="width:auto;margin:0"><option value="0.06">とても遅い</option><option value="0.12" selected>遅め</option><option value="0.25">ふつう</option></select></label></div>
-  <div class="detail" id="gmsg">選択中のテーブル（手動配置なら椅子）を、端末を傾けて動かします。開始した時の向きが基準です。</div>
-</div>
-<div class="card">
-  <h2>スティック操作</h2>
-  <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap">
-    <div id="pad" style="position:relative;width:140px;height:140px;border-radius:50%;background:var(--bg);border:2px solid var(--line);touch-action:none;user-select:none;-webkit-user-select:none"><div id="knob" style="position:absolute;left:50%;top:50%;width:54px;height:54px;margin:-27px 0 0 -27px;border-radius:50%;background:var(--acc);opacity:.85;pointer-events:none"></div></div>
-    <div style="flex:1;min-width:180px">
-      <label>速度<select id="ssp"><option value="0.1">とても遅い</option><option value="0.25" selected>遅め</option><option value="0.5">ふつう</option></select></label>
-      <div class="detail" id="smsg">選択中のテーブル（手動配置なら椅子）を、円の中のツマみをドラッグして動かします。倒した量だけ速くなります。ゲームパッド接続時は左スティックも使えます。</div>
-    </div>
-  </div>
-</div>
 <div class="card"><svg id="svg" viewBox="0 0 700 420" role="img" aria-label="配置図"></svg></div>
 </main>
 <script>
@@ -320,65 +304,6 @@ button.pri{background:var(--acc);color:#fff;border-color:var(--acc)}
     catch(e){jmsg('読み込めませんでした。JSONの形式を確認してください。')}
   };
 
-  let gOn=false,gBase=null,gLast=0,gTilt={b:0,g:0},gRender=0;
-  const gmsg=t=>{$('gmsg').textContent=t};
-  function gHandler(e){
-    if(e.beta==null||e.gamma==null)return;
-    if(!gBase)gBase={b:e.beta,g:e.gamma};
-    gTilt={b:e.beta-gBase.b,g:e.gamma-gBase.g};
-  }
-  function gLoop(t){
-    if(!gOn)return;
-    const dt=Math.min(0.1,(t-gLast)/1000); gLast=t;
-    const dead=6,max=30,sp=num($('gsp').value)||0.12;
-    const f=v=>{const a=Math.abs(v);return a<dead?0:Math.sign(v)*Math.min(1,(a-dead)/(max-dead))};
-    const dx=f(gTilt.g)*sp*dt, dy=f(gTilt.b)*sp*dt;
-    if(dx||dy){
-      if(selT>=0&&T[selT]){
-        T[selT].x=+(T[selT].x+dx).toFixed(4); T[selT].y=+(T[selT].y+dy).toFixed(4); update();
-        if(t-gRender>250){renderTables();gRender=t}
-      }else if(manual&&sel>=0&&M[sel]){
-        M[sel].x=+(M[sel].x+dx).toFixed(4); M[sel].y=+(M[sel].y+dy).toFixed(4); update();
-      }
-    }
-    requestAnimationFrame(gLoop);
-  }
-  $('grs').onclick=()=>{gBase=null;gTilt={b:0,g:0}};
-  let sVec={x:0,y:0},sLast=0,sGp=false;
-  const pad=$('pad'),knob=$('knob');
-  function sSet(e){
-    const r=pad.getBoundingClientRect(),R=r.width/2;
-    let dx=(e.clientX-(r.left+R))/R,dy=(e.clientY-(r.top+R))/R;
-    const m=Math.hypot(dx,dy); if(m>1){dx/=m;dy/=m}
-    sVec={x:dx,y:dy};
-    knob.style.transform='translate('+dx*(R-27)+'px,'+dy*(R-27)+'px)';
-  }
-  function sEnd(){sVec={x:0,y:0};knob.style.transform='translate(0,0)';if(selT>=0)renderTables()}
-  pad.addEventListener('pointerdown',e=>{pad.setPointerCapture(e.pointerId);sSet(e);e.preventDefault()});
-  pad.addEventListener('pointermove',e=>{if(pad.hasPointerCapture(e.pointerId))sSet(e)});
-  pad.addEventListener('pointerup',sEnd);
-  pad.addEventListener('pointercancel',sEnd);
-  function sLoop(t){
-    const dt=Math.min(0.1,(t-sLast)/1000); sLast=t;
-    let vx=sVec.x,vy=sVec.y;
-    const gp=(navigator.getGamepads?Array.from(navigator.getGamepads()):[]).find(g=>g&&g.axes&&g.axes.length>=2);
-    if(gp&&Math.hypot(gp.axes[0],gp.axes[1])>0.15){vx=gp.axes[0];vy=gp.axes[1]}
-    if(gp&&!sGp){sGp=true;$('smsg').textContent='ゲームパッドを検出しました。左スティックでも動かせます。'}
-    const dead=0.12,m=Math.min(1,Math.hypot(vx,vy));
-    if(m>dead){
-      const sp=num($('ssp').value)||0.25;
-      const k=(m-dead)/(1-dead)*sp*dt/Math.hypot(vx,vy), dx=vx*k, dy=vy*k;
-      if(selT>=0&&T[selT]){
-        T[selT].x=+(T[selT].x+dx).toFixed(4); T[selT].y=+(T[selT].y+dy).toFixed(4); update();
-        if(t-gRender>250){renderTables();gRender=t}
-      }else if(manual&&sel>=0&&M[sel]){
-        M[sel].x=+(M[sel].x+dx).toFixed(4); M[sel].y=+(M[sel].y+dy).toFixed(4); update();
-      }
-    }
-    requestAnimationFrame(sLoop);
-  }
-  requestAnimationFrame(t=>{sLast=t;sLoop(t)});
-
   const SK='chair-calc-v1';
   let saveTimer=0;
   function snapshot(){
@@ -424,23 +349,7 @@ button.pri{background:var(--acc);color:#fff;border-color:var(--acc)}
     if(s){try{load(JSON.parse(s))}catch(e){}}
   })();
 
-  $('gy').onclick=async()=>{
-    if(gOn){gOn=false;window.removeEventListener('deviceorientation',gHandler);$('gy').textContent='ジャイロ操作を開始';renderTables();gmsg('停止しました。');return}
-    if(!('DeviceOrientationEvent' in window)){gmsg('この端末・ブラウザではジャイロが使えません。');return}
-    try{
-      if(typeof DeviceOrientationEvent.requestPermission==='function'){
-        const p=await DeviceOrientationEvent.requestPermission();
-        if(p!=='granted'){gmsg('ジャイロの許可が得られませんでした。');return}
-      }
-    }catch(e){gmsg('ジャイロの許可が得られませんでした。');return}
-    gBase=null;gTilt={b:0,g:0};gOn=true;gLast=performance.now();
-    window.addEventListener('deviceorientation',gHandler);
-    requestAnimationFrame(gLoop);
-    $('gy').textContent='ジャイロ操作を停止';
-    gmsg('動かしたいテーブル（手動配置なら椅子）を選んで、端末を傾けてください。ゆっくり動きます。');
-    setTimeout(()=>{if(gOn&&!gBase)gmsg('ジャイロの値が届きません。スマホ・タブレットで、モーションセンサーを許可しているか確認してください。')},1500);
-  };
-  update();
+    update();
 })();
 </script>
 </body>
